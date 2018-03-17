@@ -1,3 +1,4 @@
+
 function test() {
   url=localhost:8080/Roomies
 
@@ -10,4 +11,8 @@ function test() {
 }
 
 date
-time test
+make all
+./airtabler &
+time (test)
+
+kill `pgrep airtabler`
