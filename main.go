@@ -19,16 +19,29 @@ type apiRequest struct {
 var (
 	requestsPerSecond uint64
 	timeout           time.Duration
-	apiKey            = os.Getenv("AIRTABLE_API_KEY")
-	baseURL           = "https://api.airtable.com/v0/appMDlUpKSJNcvCsm"
-	apiRequests       = make(chan *apiRequest, 5)
+	apiKey            string
+	baseURL           string
+	apiRequests       chan *apiRequest
 )
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
+	baseID := flag.String("baseid", os.Getenv("AIRTABLE_BASE_ID"), "your airtable base id")
+	flag.StringVar(&apiKey, "apikey", os.Getenv("AIRTABLE_API_KEY"), "your airtable api key")
+	flag.Uint64Var(&requestsPerSecond, "rate", 5, "requests per second")
+	flag.DurationVar(&timeout, "timeout", 30*time.Second, "airtable request timeout")
+	flag.Parse()
+
+	apiRequests = make(chan *apiRequest, requestsPerSecond*2)
+	baseURL = "https://api.airtable.com/v0/" + *baseID
+
 	if apiKey == "" {
-		log.Fatal("AIRTABLE_API_KEY missing")
+		log.Fatal("api key missing")
+	}
+
+	if *baseID == "" {
+		log.Fatal("Base id missing")
 	}
 }
 
@@ -47,10 +60,6 @@ func copyHeader(dst, src http.Header) {
 }
 
 func main() {
-	flag.Uint64Var(&requestsPerSecond, "rate", 5, "requests per second")
-	flag.DurationVar(&timeout, "timeout", 30*time.Second, "airtable request timeout")
-	flag.Parse()
-
 	go apiRequestLoop()
 
 	http.HandleFunc("/", handler)

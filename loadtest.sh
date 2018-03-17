@@ -11,8 +11,7 @@ function test() {
 }
 
 date
-make all
-./airtabler &
+./airtabler 2> test.log &
 time (test)
 
 kill `pgrep airtabler`
