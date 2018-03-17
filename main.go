@@ -18,6 +18,7 @@ type apiRequest struct {
 
 var (
 	requestsPerSecond uint64
+	timeout           time.Duration
 	apiKey            = os.Getenv("AIRTABLE_API_KEY")
 	baseURL           = "https://api.airtable.com/v0/appMDlUpKSJNcvCsm"
 	apiRequests       = make(chan *apiRequest, 5)
@@ -45,6 +46,7 @@ func copyHeader(dst, src http.Header) {
 
 func main() {
 	flag.Uint64Var(&requestsPerSecond, "rate", 5, "requests per second")
+	flag.DurationVar(&timeout, "timeout", 30*time.Second, "airtable request timeout")
 	flag.Parse()
 
 	go apiRequestLoop()
@@ -57,12 +59,15 @@ func main() {
 }
 
 func apiRequestLoop() {
-	client := &http.Client{}
-	ticker := time.Tick(time.Second / time.Duration(requestsPerSecond))
+	client := &http.Client{Timeout: timeout}
 
-	for apiReq := range apiRequests {
-		go handleAPIRequest(apiReq, client)
-		<-ticker
+	for {
+		timer := time.After(1 * time.Second)
+		for i := uint64(0); i < requestsPerSecond; i++ {
+			apiReq := <-apiRequests
+			go handleAPIRequest(apiReq, client)
+		}
+		<-timer
 	}
 }
 
