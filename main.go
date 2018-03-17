@@ -25,6 +25,8 @@ var (
 )
 
 func init() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
 	if apiKey == "" {
 		log.Fatal("AIRTABLE_API_KEY missing")
 	}
@@ -73,6 +75,7 @@ func apiRequestLoop() {
 
 func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 	w := apiReq.w
+	log.Println(apiReq.req.URL)
 	res, err := client.Do(apiReq.req)
 	if err != nil {
 		http.Error(w, res.Status, res.StatusCode)
@@ -82,7 +85,7 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 	defer res.Body.Close()
 
 	if res.StatusCode == 429 {
-		log.Println("Retrying ", apiReq.req.URL)
+		log.Println("429 - Retrying ", apiReq.req.URL)
 		time.Sleep(1 * time.Second)
 		apiRequests <- apiReq
 		return
@@ -90,7 +93,6 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 
 	copyHeader(w.Header(), res.Header)
 
-	log.Println(res.StatusCode, apiReq.req.URL)
 	io.Copy(w, res.Body)
 	apiReq.done <- struct{}{}
 }
