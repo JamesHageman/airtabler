@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -67,10 +69,29 @@ func copyHeader(dst, src http.Header) {
 func main() {
 	go apiRequestLoop()
 
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+
 	http.HandleFunc("/", handler)
 
-	log.Println("Running on " + addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	server := &http.Server{Addr: addr}
+
+	go func() {
+		log.Println("Running on " + addr)
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	signal := <-stop
+	log.Printf("Received signal %s, shutting down the server...", signal)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal("Failed to shutdown gracefully: ", err)
+	} else {
+		log.Println("Server gracefully stopped")
+	}
 }
 
 func apiRequestLoop() {
