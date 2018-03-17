@@ -10,13 +10,16 @@ import (
 	"time"
 )
 
+type Empty = struct{}
+
 type apiRequest struct {
 	req  *http.Request
 	w    http.ResponseWriter
-	done chan struct{}
+	done chan Empty
 }
 
 var (
+	empty             = Empty{}
 	requestsPerSecond uint64
 	timeout           time.Duration
 	apiKey            string
@@ -84,11 +87,12 @@ func apiRequestLoop() {
 }
 
 func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
+	defer func() { apiReq.done <- empty }()
 	w := apiReq.w
 	log.Println(apiReq.req.URL)
 	res, err := client.Do(apiReq.req)
 	if err != nil {
-		http.Error(w, res.Status, res.StatusCode)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		log.Println(err)
 		return
 	}
@@ -104,7 +108,6 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 	copyHeader(w.Header(), res.Header)
 
 	io.Copy(w, res.Body)
-	apiReq.done <- struct{}{}
 }
 
 func createProxiedRequest(req *http.Request) *http.Request {
@@ -119,7 +122,7 @@ func createProxiedRequest(req *http.Request) *http.Request {
 }
 
 func handler(w http.ResponseWriter, req *http.Request) {
-	done := make(chan struct{})
+	done := make(chan Empty, 1)
 	apiRequests <- &apiRequest{
 		req:  createProxiedRequest(req),
 		w:    w,
