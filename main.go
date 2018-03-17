@@ -27,7 +27,7 @@ var (
 	apiKey            string
 	baseURL           string
 	addr              string
-	apiRequests       chan *apiRequest
+	apiRequests       chan apiRequest
 )
 
 func init() {
@@ -40,7 +40,7 @@ func init() {
 	flag.DurationVar(&timeout, "timeout", 30*time.Second, "airtable request timeout")
 	flag.Parse()
 
-	apiRequests = make(chan *apiRequest, requestsPerSecond*2)
+	apiRequests = make(chan apiRequest)
 	baseURL = "https://api.airtable.com/v0/" + *baseID
 
 	if apiKey == "" {
@@ -67,7 +67,12 @@ func copyHeader(dst, src http.Header) {
 }
 
 func main() {
-	go apiRequestLoop()
+	doneRequestLoop := make(chan Empty, 1)
+
+	go func() {
+		apiRequestLoop()
+		doneRequestLoop <- empty
+	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -85,29 +90,27 @@ func main() {
 
 	signal := <-stop
 	log.Printf("Received signal %s, shutting down the server...", signal)
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(context.Background()); err != nil {
 		log.Fatal("Failed to shutdown gracefully: ", err)
-	} else {
-		log.Println("Server gracefully stopped")
 	}
+
+	close(apiRequests)
+	<-doneRequestLoop
+
+	log.Println("Server gracefully stopped")
 }
 
 func apiRequestLoop() {
 	client := &http.Client{Timeout: timeout}
 
-	for {
-		timer := time.After(1 * time.Second)
-		for i := uint64(0); i < requestsPerSecond; i++ {
-			apiReq := <-apiRequests
-			go handleAPIRequest(apiReq, client)
-		}
-		<-timer
+	for apiReq := range apiRequests {
+		go handleAPIRequest(apiReq, client)
+		time.Sleep(time.Second / time.Duration(requestsPerSecond))
 	}
 }
 
-func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
+func handleAPIRequest(apiReq apiRequest, client *http.Client) {
 	defer func() { apiReq.done <- empty }()
 	w := apiReq.w
 	log.Println(apiReq.req.URL)
@@ -118,13 +121,6 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 		return
 	}
 	defer res.Body.Close()
-
-	if res.StatusCode == 429 {
-		log.Println("429 - Retrying ", apiReq.req.URL)
-		time.Sleep(1 * time.Second)
-		apiRequests <- apiReq
-		return
-	}
 
 	copyHeader(w.Header(), res.Header)
 
@@ -144,7 +140,7 @@ func createProxiedRequest(req *http.Request) *http.Request {
 
 func handler(w http.ResponseWriter, req *http.Request) {
 	done := make(chan Empty, 1)
-	apiRequests <- &apiRequest{
+	apiRequests <- apiRequest{
 		req:  createProxiedRequest(req),
 		w:    w,
 		done: done,

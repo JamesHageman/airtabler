@@ -8,6 +8,8 @@ function test() {
     curl -Is $url | head -n1 & 2>/dev/null;
   done
 
+  echo "all requests sent"
+
   wait
 }
 
