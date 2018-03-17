@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"io"
 	"log"
 	"net/http"
@@ -15,27 +16,11 @@ type apiRequest struct {
 	done chan struct{}
 }
 
-const (
-	requestsPerSecond = 5
-)
-
 var (
-	apiKey  = os.Getenv("AIRTABLE_API_KEY")
-	baseURL = "https://api.airtable.com/v0/appMDlUpKSJNcvCsm"
-	// Hop-by-hop headers. These are removed when sent to the backend.
-	// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
-	hopHeaders = []string{
-		"Connection",
-		"Keep-Alive",
-		"Proxy-Authenticate",
-		"Proxy-Authorization",
-		"Te", // canonicalized version of "TE"
-		"Trailers",
-		"Transfer-Encoding",
-		"Upgrade",
-	}
-
-	apiRequests = make(chan *apiRequest, 5)
+	requestsPerSecond uint64
+	apiKey            = os.Getenv("AIRTABLE_API_KEY")
+	baseURL           = "https://api.airtable.com/v0/appMDlUpKSJNcvCsm"
+	apiRequests       = make(chan *apiRequest, 5)
 )
 
 func init() {
@@ -59,6 +44,9 @@ func copyHeader(dst, src http.Header) {
 }
 
 func main() {
+	flag.Uint64Var(&requestsPerSecond, "rate", 5, "requests per second")
+	flag.Parse()
+
 	go apiRequestLoop()
 
 	http.HandleFunc("/", handler)
@@ -70,7 +58,7 @@ func main() {
 
 func apiRequestLoop() {
 	client := &http.Client{}
-	ticker := time.Tick(time.Second / requestsPerSecond)
+	ticker := time.Tick(time.Second / time.Duration(requestsPerSecond))
 
 	for apiReq := range apiRequests {
 		go handleAPIRequest(apiReq, client)
