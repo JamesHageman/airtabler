@@ -21,12 +21,14 @@ var (
 	timeout           time.Duration
 	apiKey            string
 	baseURL           string
+	addr              string
 	apiRequests       chan *apiRequest
 )
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
+	flag.StringVar(&addr, "addr", "127.0.0.1:8080", "airtabler address")
 	baseID := flag.String("baseid", os.Getenv("AIRTABLE_BASE_ID"), "your airtable base id")
 	flag.StringVar(&apiKey, "apikey", os.Getenv("AIRTABLE_API_KEY"), "your airtable api key")
 	flag.Uint64Var(&requestsPerSecond, "rate", 5, "requests per second")
@@ -64,7 +66,6 @@ func main() {
 
 	http.HandleFunc("/", handler)
 
-	addr := "127.0.0.1:8080"
 	log.Println("Running on " + addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
