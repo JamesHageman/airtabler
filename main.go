@@ -96,9 +96,13 @@ func main() {
 func apiRequestLoop() {
 	client := &http.Client{Timeout: timeout}
 
-	for apiReq := range apiRequests {
-		go handleAPIRequest(apiReq, client)
-		time.Sleep(time.Second / time.Duration(requestsPerSecond))
+	for {
+		timer := time.After(1 * time.Second)
+		for i := uint64(0); i < requestsPerSecond; i++ {
+			apiReq := <-apiRequests
+			go handleAPIRequest(apiReq, client)
+		}
+		<-timer
 	}
 }
 
