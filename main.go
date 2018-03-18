@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"io"
@@ -123,14 +124,35 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 	io.Copy(w, res.Body)
 }
 
-func createProxiedRequest(req *http.Request) *http.Request {
-	q := req.URL.Query()
-	q.Add("api_key", apiKey)
-	reqURL, _ := url.Parse(baseURL + req.URL.Path + "?" + q.Encode())
+func proxiedURL(incomingURL *url.URL) *url.URL {
+	var buffer bytes.Buffer
 
+	buffer.WriteString(baseURL)
+	buffer.WriteString(incomingURL.Path)
+
+	query := incomingURL.Query().Encode()
+	if query != "" {
+		buffer.WriteString("?")
+		buffer.WriteString(query)
+	}
+
+	reqURL, _ := url.Parse(buffer.String())
+
+	return reqURL
+}
+
+func proxiedHeader(incomingHeaders http.Header) (ret http.Header) {
+	ret = make(http.Header)
+	copyHeader(ret, incomingHeaders)
+	ret.Add("Authorization", "Bearer "+apiKey)
+	return ret
+}
+
+func createProxiedRequest(req *http.Request) *http.Request {
 	return &http.Request{
 		Method: req.Method,
-		URL:    reqURL,
+		URL:    proxiedURL(req.URL),
+		Header: proxiedHeader(req.Header),
 	}
 }
 
