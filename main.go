@@ -27,7 +27,7 @@ var (
 	apiKey            string
 	baseURL           string
 	addr              string
-	apiRequests       chan apiRequest
+	apiRequests       chan *apiRequest
 )
 
 func init() {
@@ -40,7 +40,7 @@ func init() {
 	flag.DurationVar(&timeout, "timeout", 30*time.Second, "airtable request timeout")
 	flag.Parse()
 
-	apiRequests = make(chan apiRequest)
+	apiRequests = make(chan *apiRequest)
 	baseURL = "https://api.airtable.com/v0/" + *baseID
 
 	if apiKey == "" {
@@ -110,7 +110,7 @@ func apiRequestLoop() {
 	}
 }
 
-func handleAPIRequest(apiReq apiRequest, client *http.Client) {
+func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 	defer func() { apiReq.done <- empty }()
 	w := apiReq.w
 	log.Println(apiReq.req.URL)
@@ -140,7 +140,7 @@ func createProxiedRequest(req *http.Request) *http.Request {
 
 func handler(w http.ResponseWriter, req *http.Request) {
 	done := make(chan Empty, 1)
-	apiRequests <- apiRequest{
+	apiRequests <- &apiRequest{
 		req:  createProxiedRequest(req),
 		w:    w,
 		done: done,
