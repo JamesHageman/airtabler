@@ -67,12 +67,7 @@ func copyHeader(dst, src http.Header) {
 }
 
 func main() {
-	doneRequestLoop := make(chan Empty, 1)
-
-	go func() {
-		apiRequestLoop()
-		doneRequestLoop <- empty
-	}()
+	go apiRequestLoop()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -84,20 +79,17 @@ func main() {
 	go func() {
 		log.Println("Running on " + addr)
 		if err := server.ListenAndServe(); err != nil {
-			log.Fatal(err)
+			if err == http.ErrServerClosed {
+				log.Println("Server closed, waiting for requests to finish")
+			} else {
+				die(err)
+			}
 		}
 	}()
 
 	signal := <-stop
 	log.Printf("Received signal %s, shutting down the server...", signal)
-
-	if err := server.Shutdown(context.Background()); err != nil {
-		log.Fatal("Failed to shutdown gracefully: ", err)
-	}
-
-	close(apiRequests)
-	<-doneRequestLoop
-
+	server.Shutdown(context.Background())
 	log.Println("Server gracefully stopped")
 }
 

@@ -27,5 +27,5 @@ time (test)
 
 if [ -z $already_running_pid ]; then
   printf "stopping airtabler"
-  kill $airtabler_pid
+  kill -2 $airtabler_pid
 fi
