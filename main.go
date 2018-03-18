@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 )
 
@@ -125,18 +125,18 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 }
 
 func proxiedURL(incomingURL *url.URL) *url.URL {
-	var buffer bytes.Buffer
+	var builder strings.Builder
 
-	buffer.WriteString(baseURL)
-	buffer.WriteString(incomingURL.Path)
+	builder.WriteString(baseURL)
+	builder.WriteString(incomingURL.Path)
 
 	query := incomingURL.Query().Encode()
 	if query != "" {
-		buffer.WriteString("?")
-		buffer.WriteString(query)
+		builder.WriteString("?")
+		builder.WriteString(query)
 	}
 
-	reqURL, _ := url.Parse(buffer.String())
+	reqURL, _ := url.Parse(builder.String())
 
 	return reqURL
 }
