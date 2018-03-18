@@ -1,5 +1,8 @@
 all:
-	go build -race
+	go build -race -v
+
+install:
+	go install -v
 
 run: all
 	./airtabler

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -38,7 +40,7 @@ func init() {
 	flag.DurationVar(&timeout, "timeout", 30*time.Second, "airtable request timeout")
 	flag.Parse()
 
-	apiRequests = make(chan *apiRequest, requestsPerSecond*2)
+	apiRequests = make(chan *apiRequest)
 	baseURL = "https://api.airtable.com/v0/" + *baseID
 
 	if apiKey == "" {
@@ -67,10 +69,28 @@ func copyHeader(dst, src http.Header) {
 func main() {
 	go apiRequestLoop()
 
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+
 	http.HandleFunc("/", handler)
 
-	log.Println("Running on " + addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	server := &http.Server{Addr: addr}
+
+	go func() {
+		log.Println("Running on " + addr)
+		if err := server.ListenAndServe(); err != nil {
+			if err == http.ErrServerClosed {
+				log.Println("Server closed, waiting for requests to finish")
+			} else {
+				die(err)
+			}
+		}
+	}()
+
+	signal := <-stop
+	log.Printf("Received signal %s, shutting down the server...", signal)
+	server.Shutdown(context.Background())
+	log.Println("Server gracefully stopped")
 }
 
 func apiRequestLoop() {
@@ -97,13 +117,6 @@ func handleAPIRequest(apiReq *apiRequest, client *http.Client) {
 		return
 	}
 	defer res.Body.Close()
-
-	if res.StatusCode == 429 {
-		log.Println("429 - Retrying ", apiReq.req.URL)
-		time.Sleep(1 * time.Second)
-		apiRequests <- apiReq
-		return
-	}
 
 	copyHeader(w.Header(), res.Header)
 

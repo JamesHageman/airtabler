@@ -8,6 +8,8 @@ function test() {
     curl -Is $url | head -n1 & 2>/dev/null;
   done
 
+  echo "all requests sent"
+
   wait
 }
 
@@ -25,5 +27,5 @@ time (test)
 
 if [ -z $already_running_pid ]; then
   printf "stopping airtabler"
-  kill $airtabler_pid
+  kill -2 $airtabler_pid
 fi
